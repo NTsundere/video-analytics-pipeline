@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    # await init_db()
     async with AsyncSessionLocal() as db:
         await crud.reset_camera_statuses(db)
         await crud.seed_file_cameras(db, list_video_files())

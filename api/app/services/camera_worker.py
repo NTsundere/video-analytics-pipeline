@@ -39,7 +39,6 @@ class CameraWorker:
         self._inference_retry_at = 0.0
         self._tracker = IouTracker(settings.track_iou_threshold, settings.track_max_missed, settings.track_min_hits)
         
-        # Очереди для конвейера
         self._inference_queue: asyncio.Queue = asyncio.Queue(maxsize=1)
         self._render_queue: asyncio.Queue = asyncio.Queue(maxsize=1)
         
@@ -142,7 +141,6 @@ class CameraWorker:
             else:
                 continue
 
-            # Отправляем на отрисовку (вытесняя старый, если не успели)
             self._put_latest(self._render_queue, (frame, detections, scale_x, scale_y, started))
 
     async def _render_loop(self) -> None:

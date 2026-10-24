@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import crud
 from app.config import settings
-from app.database import AsyncSessionLocal, engine, init_db
+from app.database import AsyncSessionLocal, engine
 from app.routers import cameras, events, metrics, websocket
 from app.services.event_writer import EventWriter
 from app.services.inference_client import InferenceClient
@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # await init_db()
     async with AsyncSessionLocal() as db:
         await crud.reset_camera_statuses(db)
         await crud.seed_file_cameras(db, list_video_files())

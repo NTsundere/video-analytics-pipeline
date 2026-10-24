@@ -1,0 +1,30 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1
+    restart: unless-stopped
+
+  rtsp-feed:
+    image: linuxserver/ffmpeg:latest
+    depends_on:
+      - mediamtx
+    volumes:
+      - ./videos:/videos:ro
+    command:
+      - -re
+      - -stream_loop
+      - "-1"
+      - -i
+      - /videos/${RTSP_DEMO_VIDEO:-demo.mp4}
+      - -an
+      - -c:v
+      - libx264
+      - -preset
+      - ultrafast
+      - -tune
+      - zerolatency
+      - -f
+      - rtsp
+      - -rtsp_transport
+      - tcp
+      - rtsp://mediamtx:8554/demo
+    restart: unless-stopped

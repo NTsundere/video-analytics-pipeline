@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Video Analytics</title>
+    <style>
+        :root {
+            --paper: #edf0f4;
+            --card: #ffffff;
+            --ink: #0f1b2d;
+            --muted: #5e6b7e;
+            --line: #d7dde6;
+            --accent: #1f4fe0;
+            --accent-soft: #e4ebff;
+            --ok: #168a5b;
+            --warn: #b7791f;
+            --bad: #d03a3f;
+            --screen: #0a0e14;
+        }
+        * { box-sizing: border-box; }
+        html { color-scheme: light; }
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+            font-size: 15px;
+            line-height: 1.45;
+        }
+        button { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 20px 24px 16px;
+        }
+        .brand h1 { margin: 0; font-size: 1.35rem; font-weight: 650; letter-spacing: -0.01em; }
+        .brand p { margin: 2px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+        .conn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            font-size: 0.88rem;
+            white-space: nowrap;
+        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+        .conn[data-state="ok"] .dot { background: var(--ok); }
+        .conn[data-state="wait"] .dot { background: var(--warn); }
+        .conn[data-state="error"] .dot { background: var(--bad); }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 360px;
+            gap: 24px;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 0 24px 40px;
+            align-items: start;
+        }
+
+        .screen {
+            position: relative;
+            aspect-ratio: 16 / 9;
+            background: var(--screen);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+        .screen img.active { display: block; }
+        .empty {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 24px;
+            color: #9aa6b8;
+            text-align: center;
+        }
+        .empty strong { color: #e6ebf3; font-weight: 600; }
+        .hud {
+            position: absolute;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 12px;
+            pointer-events: none;
+        }
+        .hud-top { top: 0; }
+        .hud-bottom { bottom: 0; }
+        .hud span {
+            padding: 3px 9px;
+            background: rgba(10, 14, 20, 0.72);
+            color: #f2f5fa;
+            border-radius: 3px;
+            font-size: 0.82rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .hud span:empty { display: none; }
+
+        .side { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
+        .side section { padding: 16px 18px; border-top: 1px solid var(--line); }
+        .side section:first-child { border-top: 0; }
+        .side h2 { margin: 0 0 10px; font-size: 0.95rem; font-weight: 650; }
+
+        .cameras { display: flex; flex-direction: column; gap: 2px; }
+        .camera {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 8px 10px 8px 12px;
+            background: transparent;
+            border: 0;
+            border-left: 3px solid transparent;
+            text-align: left;
+            cursor: pointer;
+        }
+        .camera:hover { background: var(--paper); }
+        .camera[aria-pressed="true"] { background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+        .camera .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .camera .state { color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+        .camera .dot[data-online="true"] { background: var(--ok); }
+
+        .stages { display: grid; gap: 9px; margin: 0 0 14px; }
+        .stage { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 0.88rem; }
+        .stage b { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .bar { grid-column: 1 / -1; height: 4px; background: var(--paper); border-radius: 2px; overflow: hidden; }
+        .bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
+        .stage[data-stage="total"] .bar span { background: var(--ink); }
+
+        .facts { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 0.88rem; }
+        .facts dt { color: var(--muted); }
+        .facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+        .events { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+        .events li {
+            display: grid;
+            grid-template-columns: 62px 1fr auto;
+            gap: 8px;
+            padding: 6px 0;
+            border-top: 1px solid var(--line);
+            font-size: 0.88rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .events li:first-child { border-top: 0; }
+        .events .time { color: var(--muted); }
+        .events .conf { font-weight: 600; }
+        .note { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+        @media (max-width: 960px) {
+            .layout { grid-template-columns: 1fr; }
+            .topbar, .layout { padding-left: 16px; padding-right: 16px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bar span { transition: none; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <h1>Video Analytics</h1>
+            <p>Детекция и трекинг объектов в реальном времени</p>
+        </div>
+        <div class="conn" id="conn" data-state="wait" role="status">
+            <span class="dot"></span><span id="connText">загрузка</span>
+        </div>
+    </header>
+
+    <main class="layout">
+        <section aria-label="Видеопоток">
+            <div class="screen">
+                <img id="stream" alt="Видеопоток с рамками детекций">
+                <div class="empty" id="empty">
+                    <strong>Камера не выбрана</strong>
+                    <span>Выберите камеру справа</span>
+                </div>
+                <div class="hud hud-top"><span id="hudCamera"></span><span id="hudFps"></span></div>
+                <div class="hud hud-bottom"><span id="hudInfo"></span></div>
+            </div>
+        </section>
+
+        <aside class="side">
+            <section>
+                <h2>Камеры</h2>
+                <div class="cameras" id="cameraList"></div>
+            </section>
+
+            <section>
+                <h2>Конвейер</h2>
+                <div class="stages">
+                    <div class="stage" data-stage="prepare"><span>Подготовка кадра</span><b>–</b><div class="bar"><span></span></div></div>
+                    <div class="stage" data-stage="inference"><span>Инференс</span><b>–</b><div class="bar"><span></span></div></div>
+                    <div class="stage" data-stage="render"><span>Отрисовка</span><b>–</b><div class="bar"><span></span></div></div>
+                    <div class="stage" data-stage="total"><span>Итого на кадр</span><b>–</b><div class="bar"><span></span></div></div>
+                </div>
+                <dl class="facts">
+                    <dt>Кадров в секунду</dt><dd id="factFps">–</dd>
+                    <dt>Обработано кадров</dt><dd id="factProcessed">–</dd>
+                    <dt>Пропущено кадров</dt><dd id="factDropped">–</dd>
+                    <dt>Ошибок инференса</dt><dd id="factErrors">–</dd>
+                    <dt>Зрителей</dt><dd id="factViewers">–</dd>
+                    <dt>Потеряно событий</dt><dd id="factEvents">–</dd>
+                </dl>
+            </section>
+
+            <section>
+                <h2>Новые объекты</h2>
+                <ol class="events" id="eventList"></ol>
+                <p class="note" id="eventNote">Событий пока нет</p>
+            </section>
+        </aside>
+    </main>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const els = {
+            conn: $("conn"), connText: $("connText"), img: $("stream"), empty: $("empty"),
+            hudCamera: $("hudCamera"), hudFps: $("hudFps"), hudInfo: $("hudInfo"),
+            cameraList: $("cameraList"), eventList: $("eventList"), eventNote: $("eventNote"),
+            factFps: $("factFps"), factProcessed: $("factProcessed"), factDropped: $("factDropped"),
+            factErrors: $("factErrors"), factViewers: $("factViewers"), factEvents: $("factEvents"),
+        };
+
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        const origin = location.host || "localhost:8000";
+
+        let cameras = [];
+        let currentId = null;
+        let ws = null;
+        let reconnectTimer = null;
+        let currentUrl = null;
+        let received = 0;
+        let lastTick = performance.now();
+        let clientFps = 0;
+
+        function setConn(text, state) {
+            els.connText.textContent = text;
+            els.conn.dataset.state = state;
+        }
+
+        function currentCamera() {
+            return cameras.find((camera) => camera.id === currentId) || null;
+        }
+
+        function renderCameras() {
+            els.cameraList.replaceChildren();
+            for (const camera of cameras) {
+                const button = document.createElement("button");
+                button.className = "camera";
+                button.type = "button";
+                button.setAttribute("aria-pressed", String(camera.id === currentId));
+
+                const dot = document.createElement("span");
+                dot.className = "dot";
+                dot.dataset.online = String(camera.status === "online");
+
+                const name = document.createElement("span");
+                name.className = "name";
+                name.textContent = camera.name;
+
+                const state = document.createElement("span");
+                state.className = "state";
+                state.textContent = camera.status === "online" ? "в работе" : "ожидает";
+
+                button.append(dot, name, state);
+                button.addEventListener("click", () => selectCamera(camera.id));
+                els.cameraList.appendChild(button);
+            }
+        }
+
+        function selectCamera(id) {
+            if (id === currentId) return;
+            currentId = id;
+            renderCameras();
+            resetView();
+            connect();
+            refreshEvents();
+        }
+
+        function resetView() {
+            clientFps = 0;
+            received = 0;
+            els.img.classList.remove("active");
+            els.empty.style.display = "";
+            els.hudFps.textContent = "";
+            els.hudInfo.textContent = "";
+            els.hudCamera.textContent = currentCamera() ? currentCamera().name : "";
+            for (const row of document.querySelectorAll(".stage")) {
+                row.querySelector("b").textContent = "–";
+                row.querySelector(".bar span").style.width = "0";
+            }
+            for (const el of [els.factFps, els.factProcessed, els.factDropped, els.factErrors, els.factViewers]) {
+                el.textContent = "–";
+            }
+        }
+
+        function connect() {
+            clearTimeout(reconnectTimer);
+            if (ws) {
+                ws.onclose = null;
+                ws.onmessage = null;
+                ws.close();
+                ws = null;
+            }
+            if (currentId === null) return;
+
+            setConn("подключение", "wait");
+            ws = new WebSocket(`${protocol}://${origin}/ws/stream/${currentId}`);
+
+            ws.onopen = () => setConn("в эфире", "ok");
+
+            ws.onmessage = (event) => {
+                const url = URL.createObjectURL(event.data);
+                const previous = currentUrl;
+                currentUrl = url;
+                els.img.src = url;
+                els.img.classList.add("active");
+                els.empty.style.display = "none";
+                if (previous) URL.revokeObjectURL(previous);
+
+                received++;
+                const now = performance.now();
+                if (now - lastTick >= 1000) {
+                    clientFps = Math.round((received * 1000) / (now - lastTick));
+                    received = 0;
+                    lastTick = now;
+                    els.hudFps.textContent = `${clientFps} кадр/с у зрителя`;
+                }
+            };
+
+            ws.onclose = () => {
+                setConn("соединение потеряно, переподключение", "error");
+                reconnectTimer = setTimeout(connect, 2000);
+            };
+        }
+
+        async function refreshCameras() {
+            try {
+                const response = await fetch("/api/cameras");
+                if (!response.ok) throw new Error(response.status);
+                cameras = await response.json();
+            } catch (error) {
+                setConn("сервер недоступен", "error");
+                return;
+            }
+            if (cameras.length === 0) {
+                els.empty.querySelector("strong").textContent = "Камер нет";
+                els.empty.querySelector("span").textContent = "Положите видео в папку videos и перезапустите api";
+                setConn("нет камер", "error");
+                return;
+            }
+            if (currentId === null) {
+                currentId = cameras[0].id;
+                resetView();
+                connect();
+                refreshEvents();
+            }
+            renderCameras();
+        }
+
+        function setFact(el, value) {
+            el.textContent = value === undefined || value === null ? "–" : String(value);
+        }
+
+        async function refreshMetrics() {
+            if (currentId === null) return;
+            try {
+                const response = await fetch("/api/metrics");
+                if (!response.ok) return;
+                const data = await response.json();
+                setFact(els.factEvents, data.events_dropped);
+                const worker = data.workers.find((item) => item.camera_id === currentId);
+                if (!worker) return;
+
+                const stages = worker.stages_ms || {};
+                const total = stages.total || 0;
+                for (const row of document.querySelectorAll(".stage")) {
+                    const value = stages[row.dataset.stage];
+                    row.querySelector("b").textContent = value === undefined ? "–" : `${value.toFixed(1)} мс`;
+                    const share = value === undefined || total === 0 ? 0 : Math.min(100, (value / total) * 100);
+                    row.querySelector(".bar span").style.width = `${share}%`;
+                }
+                setFact(els.factFps, worker.fps);
+                setFact(els.factProcessed, worker.frames_processed);
+                setFact(els.factDropped, worker.frames_dropped);
+                setFact(els.factErrors, worker.inference_errors);
+                setFact(els.factViewers, worker.subscribers);
+                els.hudInfo.textContent = `обработка ${worker.fps} кадр/с, пропущено ${worker.frames_dropped}`;
+            } catch (error) {
+                return;
+            }
+        }
+
+        async function refreshEvents() {
+            if (currentId === null) return;
+            try {
+                const response = await fetch(`/api/events?limit=12&camera_id=${currentId}`);
+                if (!response.ok) return;
+                const events = await response.json();
+                els.eventList.replaceChildren();
+                els.eventNote.style.display = events.length === 0 ? "" : "none";
+                for (const event of events) {
+                    const item = document.createElement("li");
+                    const time = document.createElement("span");
+                    time.className = "time";
+                    time.textContent = new Date(event.timestamp).toLocaleTimeString("ru-RU");
+                    const name = document.createElement("span");
+                    name.textContent = event.object_class;
+                    const conf = document.createElement("span");
+                    conf.className = "conf";
+                    conf.textContent = `${Math.round(event.confidence * 100)}%`;
+                    item.append(time, name, conf);
+                    els.eventList.appendChild(item);
+                }
+            } catch (error) {
+                return;
+            }
+        }
+
+        refreshCameras();
+        setInterval(refreshCameras, 5000);
+        setInterval(refreshMetrics, 1000);
+        setInterval(refreshEvents, 2000);
+    </script>
+</body>
+</html>
